@@ -1,0 +1,7 @@
+{
+  "/api/stats/route": "app/api/stats/route.js",
+  "/api/accounts/route": "app/api/accounts/route.js",
+  "/api/templates/route": "app/api/templates/route.js",
+  "/api/campaigns/route": "app/api/campaigns/route.js",
+  "/dashboard/page": "app/dashboard/page.js"
+}
