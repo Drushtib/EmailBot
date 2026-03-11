@@ -5,7 +5,7 @@ import { resolveSenderAccountById } from '../../../../lib/senderAccounts';
 export async function POST(req) {
   try {
     const body = await req.json();
-    const account = resolveSenderAccountById(body.accountId);
+    const account = await resolveSenderAccountById(body.accountId);
     if (!account) {
       return NextResponse.json({ error: 'Sender account not found' }, { status: 404 });
     }

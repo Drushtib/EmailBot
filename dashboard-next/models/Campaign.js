@@ -10,6 +10,11 @@ const CampaignSchema = new mongoose.Schema(
       subject: { type: String, default: '' },
       body: { type: String, default: '' }
     },
+
+    // Optional: reference an account from /api/accounts (db:<id> or env id)
+    senderAccountId: { type: String, default: '' },
+
+    // Snapshot for UI; campaigns can still run via senderAccountId resolution.
     senderAccount: {
       provider: { type: String, default: '' },
       label: { type: String, default: '' },

@@ -48,12 +48,14 @@ function RichTextEditor({ value, onChange, placeholder }) {
     const text = e.clipboardData?.getData('text/plain');
     if (text) {
       e.preventDefault();
-      const escaped = text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/\n/g, '<br>');
-      runCommand('insertHTML', escaped);
+      const normalized = String(text).replace(/\r\n/g, "\n");
+      const escaped = normalized
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      // Preserve line breaks and spacing when clipboard has only plain text.
+      const wrapped = `<div style="white-space:pre-wrap;font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.6;">${escaped}</div>`;
+      runCommand("insertHTML", wrapped);
     }
   };
 
@@ -98,6 +100,59 @@ function RichTextEditor({ value, onChange, placeholder }) {
     </div>
   );
 }
+const PROJECT_PRESET_SENDERS = {
+  tec: [
+    'sam@theentrepreneurialchronicle.com',
+    'clara@theentrepreneurialchronicle.com',
+    'sophia@theentrepreneurialchronicle.com',
+    'jess@theentrepreneurialchronicle.com',
+    'diana@theentrepreneurialchronicle.com',
+    'victoria@theentrepreneurialchronicle.com',
+    'alina@theentrepreneurialchronicle.com',
+    'amelia@theentrepreneurialchronicle.com',
+    'grace@theentrepreneurialchronicle.com',
+    'eliana@theentrepreneurialchronicle.com',
+    'liam@theentrepreneurialchronicle.com',
+    'emma@theentrepreneurialchronicle.com',
+    'fiona@theentrepreneurialchronicle.com',
+    'daniel@theentrepreneurialchronicle.com',
+    'lacy@theentrepreneurialchronicle.com'
+  ],
+  tut: [
+    'matt@theunicorntimes.com',
+    'jordan@theunicorntimes.com',
+    'jessica@theunicorntimes.com',
+    'ethan@theunicorntimes.com',
+    'lily@theunicorntimes.com',
+    'jasmin@theunicorntimes.com',
+    'kevin@theunicorntimes.com',
+    'peter@theunicorntimes.com',
+    'tyler@theunicorntimes.com',
+    'olivia@theunicorntimes.com'
+  ]
+};
+
+const normalizeEmail = (value = '') => String(value || '').toLowerCase();
+
+const filterAccountsByProject = (list = [], projectKey = '') => {
+  const project = String(projectKey || '').toLowerCase();
+  const allowedList = PROJECT_PRESET_SENDERS[project] || [];
+  const hasAllowed = allowedList.length > 0;
+  const allowedSet = new Set(allowedList.map((email) => email.toLowerCase()));
+  return list.filter((account) => {
+    const fromEmail = normalizeEmail(account?.from);
+    if (hasAllowed && allowedSet.has(fromEmail)) {
+      return true;
+    }
+    if (!hasAllowed) {
+      return true;
+    }
+    const projectHint = String(account?.project || '').toLowerCase();
+    return projectHint === project;
+  });
+};
+
+
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({ totalUploaded: 0, sent: 0, pending: 0, failed: 0 });
@@ -112,44 +167,126 @@ export default function DashboardPage() {
   const [batchSize, setBatchSize] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [project, setProject] = useState('tec');
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState('');
   const [activeAccount, setActiveAccount] = useState('');
+  const projectAccounts = useMemo(() => filterAccountsByProject(accounts, project), [accounts, project]);
   const [testEmailTo, setTestEmailTo] = useState('');
   const [selectedDraft, setSelectedDraft] = useState('cover_story');
   const [draftSubject, setDraftSubject] = useState('');
   const [draftBody, setDraftBody] = useState('');
-
   const activeCampaign = useMemo(() => campaigns.find((c) => c.status === 'Running' || c.status === 'Paused'), [campaigns]);
   const progressText = activeCampaign ? `${activeCampaign.stats?.sent || 0}/${activeCampaign.stats?.total || 0} emails sent` : '0/0 emails sent';
+  const selectedAcc = useMemo(() => projectAccounts.find((a) => a.id === selectedAccount) || null, [projectAccounts, selectedAccount]);
+
+  useEffect(() => {
+    if (!projectAccounts.length) {
+      setSelectedAccount('');
+      setActiveAccount('');
+      return;
+    }
+    const match = projectAccounts.find((a) => a.id === selectedAccount);
+    if (match) {
+      setActiveAccount(match.from || '');
+      return;
+    }
+    const next = projectAccounts[0];
+    setSelectedAccount(next.id);
+    setActiveAccount(next.from || '');
+  }, [projectAccounts, selectedAccount]);
 
   const draftTemplates = {
     cover_story: {
-      label: 'Cover Story',
-      subject: 'Cover Story Opportunity for {{Name}} at {{Company}}',
-      body: '<div style="font-family:Calibri, Arial, sans-serif;font-size:15px;line-height:1.55;"><p style="margin:0 0 12px;">Hi {{Name}},</p><p style="margin:0 0 12px;">We would love to feature <strong>{{Company}}</strong> in our upcoming cover story edition.</p><p style="margin:0 0 12px;">Please let us know if you are available for a short interaction.</p><p style="margin:0;">Regards,<br/>Team</p></div>'
+      label: "Cover Story",
+      subject: "Cover Story: {{Name}} Shortlisted for The Most Eminent Robotics Leaders Driving Intelligent Automation - 2026",
+      body: `<div style="font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.6;">
+  <p style="margin:0 0 12px;">Dear {{Name}},</p>
+  <p style="margin:0 0 12px;">I hope you are doing well.</p>
+  <p style="margin:0 0 12px;">I am writing to inform you that our editorial team at The Entrepreneurial Chronicles Magazine has shortlisted you for inclusion in one of our upcoming 2026 leadership editions, "The Most Eminent Robotics Leaders Driving Intelligent Automation - 2026", recognizing professionals who are driving innovation, growth, and meaningful impact within their respective industries.</p>
+  <p style="margin:0 0 12px;">This edition highlights distinguished leaders who are advancing the industry through strategic vision, operational excellence, and forward-thinking leadership. Based on our editorial review, we believe your professional journey and contributions align strongly with the purpose of this feature.</p>
+  <p style="margin:0 0 8px;"><strong>Cover Story Feature - Key Inclusions:</strong></p>
+  <ul style="margin:0 0 12px;padding-left:18px;">
+    <li>A dedicated 12+ page editorial profile in the print and digital magazine, covering your leadership journey, achievements, and future vision</li>
+    <li>Your professional image featured on the cover of the edition</li>
+    <li>A high-resolution, print-ready PDF version of your profile with reprint rights</li>
+    <li>Official recognition logo for use on your website, media, and professional communications</li>
+    <li>A digital certificate and commemorative recognition trophy</li>
+    <li>10 to 20 complimentary hard copies</li>
+    <li>Two full-page advertisements for your organization, usable within 12 months</li>
+    <li>Two full-page CXO profile features</li>
+    <li>Video feature promotion across our digital and social media platforms</li>
+    <li>Additional visibility through our website, including announcements and press releases</li>
+    <li>A direct backlink to your company website</li>
+    <li>One full back-page advertisement in an upcoming edition</li>
+  </ul>
+  <p style="margin:0 0 8px;"><strong>Sponsorship and Production Cost:</strong></p>
+  <p style="margin:0 0 12px;">The total investment for this complete editorial and branding package is USD 1,600, which covers editorial development, design, publication, and promotional activities associated with your feature.</p>
+  <p style="margin:0 0 12px;">If this aligns with your current branding and visibility objectives, I would be happy to share the formal proposal and next steps for your review.</p>
+  <p style="margin:0 0 12px;">Please feel free to reply with your interest or suggest a convenient time if you would like to discuss this further.</p>
+  <p style="margin:0 0 12px;">To connect with us, please provide your convenient time here.</p>
+  <p style="margin:0;">Warm regards,<br/>Victoria Langley | Marketing Coordinator<br/>The Entrepreneurial Chronicle</p>
+</div>`,
     },
     reminder: {
-      label: 'Reminder',
-      subject: 'Reminder: Cover Story Opportunity',
-      body: '<div style="font-family:Calibri, Arial, sans-serif;font-size:15px;line-height:1.55;"><p style="margin:0 0 12px;">Hi {{Name}},</p><p style="margin:0 0 12px;">This is a quick reminder regarding our cover story invitation for <strong>{{Company}}</strong>.</p><p style="margin:0;">Regards,<br/>Team</p></div>'
+      label: "Reminder",
+      subject: "Reminder: Feature Opportunity in The Visionary Leader Shaping the Future of Industry - 2026",
+      body: `<div style="font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.6;">
+  <p style="margin:0 0 12px;">Hello {{Name}},</p>
+  <p style="margin:0 0 12px;">This is a gentle reminder about the exclusive feature opportunity we shared with you recently.</p>
+  <p style="margin:0 0 12px;">Our upcoming Special Edition, "The Visionary Leader Shaping the Future of Industry - 2026," aims to spotlight leaders transforming the healthcare industry, and we believe your story would be a strong fit.</p>
+  <p style="margin:0 0 12px;">The package includes a multi-page profile, cover feature, digital promotions, and year-long branding support.</p>
+  <p style="margin:0 0 12px;">Please let us know if you're interested or would like to confirm your participation so we can proceed with the next steps.</p>
+  <p style="margin:0;">Best regards,<br/>Victoria Langley</p>
+</div>`,
     },
     follow_up: {
-      label: 'Follow Up',
-      subject: 'Follow-up: Quick Response Requested',
-      body: '<div style="font-family:Calibri, Arial, sans-serif;font-size:15px;line-height:1.55;"><p style="margin:0 0 12px;">Hi {{Name}},</p><p style="margin:0 0 12px;">Following up for your response on the opportunity shared earlier.</p><p style="margin:0;">Regards,<br/>Team</p></div>'
+      label: "Follow Up",
+      subject: "Follow-Up on Cover Story Proposal - The Most Eminent Robotics Leaders Driving Intelligent Automation - 2026",
+      body: `<div style="font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.6;">
+  <p style="margin:0 0 12px;">Dear {{Name}},</p>
+  <p style="margin:0 0 12px;">I hope you're doing well.</p>
+  <p style="margin:0 0 12px;">I wanted to kindly follow up on the proposal I shared regarding our upcoming special edition, "The Most Eminent Robotics Leaders Driving Intelligent Automation - 2026." We believe your leadership journey would be an excellent fit for this feature, and the cover story package offers a strong platform to showcase your success and inspire a global audience.</p>
+  <p style="margin:0 0 12px;">May I ask if you've had a chance to review the details? I'd be happy to discuss the next steps at a time that works best for you.</p>
+  <p style="margin:0 0 12px;">Looking forward to your thoughts.</p>
+  <p style="margin:0;">Warm Regards,<br/>Victoria Langley</p>
+</div>`,
     },
     updated_cost: {
-      label: 'Updated Cost',
-      subject: 'Updated Cost Details for {{Company}}',
-      body: '<div style="font-family:Calibri, Arial, sans-serif;font-size:15px;line-height:1.55;"><p style="margin:0 0 12px;">Hi {{Name}},</p><p style="margin:0 0 12px;">Please find the updated cost details for your participation.</p><p style="margin:0;">Regards,<br/>Team</p></div>'
+      label: "Updated Cost",
+      subject: "Updated Sponsorship Details - The Most Eminent Robotics Leaders Driving Intelligent Automation - 2026",
+      body: `<div style="font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.6;">
+  <p style="margin:0 0 12px;">Hello {{Name}},</p>
+  <p style="margin:0 0 12px;">I hope everything is going great on your end.</p>
+  <p style="margin:0 0 12px;">I'm reaching out regarding our proposal to feature you in our upcoming special edition, "The Most Eminent Robotics Leaders Driving Intelligent Automation - 2026." Your remarkable contributions to the industry make you an excellent fit, and we'd be delighted to showcase your journey to our 295,000+ C-Suite subscribers and 370,000 readers worldwide.</p>
+  <p style="margin:0 0 12px;">As the Halloween offer has now ended, the updated sponsorship cost for your feature is $1,000 USD (revised from the original $1,600 USD). This still includes all the benefits outlined in the original proposal from your cover story feature and editorial write-up to digital promotions, advertisements, and recognition awards.</p>
+  <p style="margin:0 0 12px;">We'd love to confirm your participation and reserve your spot in this upcoming edition. Please let me know your thoughts, and I'll share the updated Media Partnership Contract for your review and signature.</p>
+  <p style="margin:0 0 12px;">Looking forward to your positive response and confirmation.</p>
+  <p style="margin:0;">Warm regards,<br/>Victoria Langley</p>
+</div>`,
     },
     final_cost: {
-      label: 'Final Cost',
-      subject: 'Final Cost Confirmation',
-      body: '<div style="font-family:Calibri, Arial, sans-serif;font-size:15px;line-height:1.55;"><p style="margin:0 0 12px;">Hi {{Name}},</p><p style="margin:0 0 12px;">This is the final cost confirmation for your selected plan.</p><p style="margin:0;">Regards,<br/>Team</p></div>'
+      label: "Final Call",
+      subject: "Final Call: Special Rate for The Most Eminent Robotics Leaders Driving Intelligent Automation - 2026",
+      body: `<div style="font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.6;">
+  <p style="margin:0 0 12px;">Dear {{Name}},</p>
+  <p style="margin:0 0 12px;">I wanted to reach out one last time regarding your feature in "The Most Eminent Robotics Leaders Driving Intelligent Automation - 2026."</p>
+  <p style="margin:0 0 12px;">To make this opportunity even more exciting, we are offering a final special rate of $700 USD for the full premium package, which includes your cover story, multi-page profile, digital promotions, social media features, advertisements, recognition awards, and a back-link to your website.</p>
+  <p style="margin:0 0 12px;">This is a limited-time offer, and we would love to confirm your participation to secure your spot in this edition. Don't miss the chance to showcase your leadership to our 295,000+ C-Suite subscribers and 370,000 readers worldwide.</p>
+  <p style="margin:0 0 12px;">Please confirm at your earliest convenience so we can proceed with the next steps.</p>
+  <p style="margin:0;">Warm regards,<br/>Victoria Langley</p>
+</div>`,
     }
   };
+
+
+  useEffect(() => {
+    const tpl = draftTemplates[selectedDraft];
+    if (tpl) {
+      setDraftSubject(tpl.subject || "");
+      setDraftBody(tpl.body || "");
+    }
+  }, [selectedDraft]);
 
   const safeFetchJson = async (url, options) => {
     const res = await fetch(url, options);
@@ -177,7 +314,7 @@ export default function DashboardPage() {
         safeFetchJson('/api/stats'),
         safeFetchJson('/api/templates'),
         safeFetchJson('/api/campaigns'),
-        safeFetchJson('/api/accounts')
+        safeFetchJson(`/api/accounts?project=${encodeURIComponent(project)}`)
       ]);
 
       setError('');
@@ -186,6 +323,12 @@ export default function DashboardPage() {
       setTemplates(tpl.templates || []);
       setCampaigns(cps.campaigns || []);
       setAccounts(accRes.accounts || []);
+
+      const accList = accRes.accounts || [];
+      if (selectedAccount && !accList.find((a) => a.id === selectedAccount)) {
+        setSelectedAccount(accList[0]?.id || "");
+        setActiveAccount(accList[0]?.from || "");
+      }
 
       if (!selectedListId && st.lists?.[0]?._id) {
         setSelectedListId(st.lists[0]._id);
@@ -207,17 +350,14 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    const t = draftTemplates[selectedDraft];
-    if (t) {
-      setDraftBody(t.body);
-      setDraftSubject((prev) => (prev ? prev : t.subject));
-    }
-  }, [selectedDraft]);
+    loadAll();
+  }, [project]);
+
 
   useEffect(() => {
     const id = setInterval(loadAll, 5000);
     return () => clearInterval(id);
-  }, [selectedListId, selectedTemplateId]);
+  }, [selectedListId, selectedTemplateId, project]);
 
   const onUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -260,9 +400,20 @@ export default function DashboardPage() {
     }
   };
 
+  const startGraphOAuth = (expectedEmail = "") => {
+    const returnTo = window.location.pathname + window.location.search;
+    let u = "/api/graph-oauth/start?returnTo=" + encodeURIComponent(returnTo);
+    if (expectedEmail) u += "&expectedEmail=" + encodeURIComponent(expectedEmail) + "&loginHint=" + encodeURIComponent(expectedEmail);
+    window.location.href = u;
+  };
+
   const connectSelectedAccount = async () => {
     const acc = accounts.find((a) => a.id === selectedAccount);
     if (!acc) return alert('Select sender account');
+    if (acc.provider === "graph_oauth" && String(acc.status || "").toLowerCase() !== "connected") {
+      startGraphOAuth(acc.from || "");
+      return;
+    }
     try {
       await safeFetchJson('/api/accounts/connect', {
         method: 'POST',
@@ -275,6 +426,7 @@ export default function DashboardPage() {
       alert(e.message || 'Account connection failed');
     }
   };
+
 
   const sendTestEmail = async () => {
     const acc = accounts.find((a) => a.id === selectedAccount);
@@ -396,15 +548,54 @@ export default function DashboardPage() {
       </section>
 
       <section className="card grid">
-        <h3>Sender Email Account</h3>
-        <div className="row">
-          <select className="select" style={{ maxWidth: 360 }} value={selectedAccount} onChange={(e) => setSelectedAccount(e.target.value)}>
-            <option value="">Select sender account</option>
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.label} - {a.from}</option>)}
+        <h3>Select Sender Email</h3>
+        <div className="row" style={{ flexWrap: "wrap" }}>
+          <select
+            className="select"
+            style={{ maxWidth: 160 }}
+            value={project}
+            onChange={(e) => {
+              setProject(e.target.value);
+              setSelectedAccount("");
+              setActiveAccount("");
+            }}
+          >
+            <option value="tec">TEC</option>
+            <option value="tut">TUT</option>
           </select>
-          <button className="button secondary" onClick={connectSelectedAccount}>Login / Connect</button>
-          <span className="badge sent">Active: {activeAccount || 'none'}</span>
+          <select
+            className="select"
+            style={{ maxWidth: 420 }}
+            value={selectedAccount}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "__oauth_add__") {
+                startGraphOAuth();
+                return;
+              }
+              setSelectedAccount(v);
+              const acc = accounts.find((a) => a.id === v);
+              setActiveAccount(acc?.from || "");
+            }}
+          >
+            <option value="">Select Account</option>
+            {projectAccounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.from}
+              </option>
+            ))}
+            <option value="__oauth_add__">Connect New Account</option>
+          </select>
+          <button className="button secondary" type="button" onClick={startGraphOAuth}>Login / Connect Outlook Account</button>
+          <button className="button secondary" type="button" onClick={connectSelectedAccount}>Use Selected Sender</button>
+          <span className="badge sent">Active Sender: {activeAccount || "none"}</span>
         </div>
+        {selectedAcc ? (
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <p style={{ margin: 0 }}>{selectedAcc.label} - {selectedAcc.from}</p>
+            <p style={{ margin: 0 }}>Status: Connected / Active</p>
+          </div>
+        ) : null}
       </section>
 
       <section className="card grid">
@@ -415,7 +606,7 @@ export default function DashboardPage() {
             <option value="reminder">Reminder</option>
             <option value="follow_up">Follow Up</option>
             <option value="updated_cost">Updated Cost</option>
-            <option value="final_cost">Final Cost</option>
+            <option value="final_cost">Final Call</option>
           </select>
         </div>
         <p style={{ fontWeight: 600, color: 'var(--text)' }}>Subject Line</p>
@@ -541,3 +732,5 @@ export default function DashboardPage() {
     </main>
   );
 }
+
+

@@ -5,7 +5,7 @@ const COOKIE_NAME = 'auth_token';
 export function middleware(req) {
   const { pathname } = req.nextUrl;
 
-  const publicPaths = ['/login', '/api/auth/login'];
+  const publicPaths = ['/login', '/api/auth/login', '/api/graph-oauth/start', '/api/graph-oauth/callback'];
   const isPublic = publicPaths.includes(pathname) || pathname.startsWith('/_next') || pathname.includes('.');
   if (isPublic) {
     return NextResponse.next();

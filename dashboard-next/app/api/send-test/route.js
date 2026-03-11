@@ -9,7 +9,7 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Test recipient email is required' }, { status: 400 });
     }
 
-    const account = resolveSenderAccountById(accountId);
+    const account = await resolveSenderAccountById(accountId);
     if (!account) {
       return NextResponse.json({ error: 'Sender account not found' }, { status: 404 });
     }

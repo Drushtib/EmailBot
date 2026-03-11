@@ -96,6 +96,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .wysiwyg-editor {
+  font-family: 'Times New Roman', Times, serif;
   min-height: 220px;
   padding: 12px;
   outline: none;
