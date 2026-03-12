@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+// import ScriptManager from "../dashboard/ScriptManager";
 
 function StatCard({ title, value }) {
   return (
@@ -152,6 +153,13 @@ const filterAccountsByProject = (list = [], projectKey = '') => {
   });
 };
 
+const DRAFT_CATEGORIES = [
+  { label: "Cover Story", value: "cover_story" },
+  { label: "Reminder", value: "reminder" },
+  { label: "Follow Up", value: "follow_up" },
+  { label: "Updated Cost", value: "updated_cost" },
+  { label: "Final Cost", value: "final_cost" }
+];
 
 
 export default function DashboardPage() {
@@ -176,6 +184,44 @@ export default function DashboardPage() {
   const [selectedDraft, setSelectedDraft] = useState('cover_story');
   const [draftSubject, setDraftSubject] = useState('');
   const [draftBody, setDraftBody] = useState('');
+
+  const [showAddDraft, setShowAddDraft] = useState(false);
+const [newDraftCategory, setNewDraftCategory] = useState("cover_story");
+const [newDraftSubject, setNewDraftSubject] = useState("");
+const [newDraftBody, setNewDraftBody] = useState("");
+
+const loadScript = (script) => {
+
+  setDraftSubject(script.subject);
+  setDraftBody(script.body);
+
+};
+
+const addNewDraft = () => {
+
+  if (!newDraftSubject || !newDraftBody) {
+    alert("Please enter subject and body");
+    return;
+  }
+
+  const newScript = {
+    id: Date.now(),
+    category: newDraftCategory,
+    subject: newDraftSubject,
+    body: newDraftBody
+  };
+
+  setSavedDrafts([...savedDrafts, newScript]);
+
+  setNewDraftSubject("");
+  setNewDraftBody("");
+  setShowAddDraft(false);
+
+  alert("Draft Script Added");
+
+};
+
+const [savedDrafts, setSavedDrafts] = useState([]);
   const activeCampaign = useMemo(() => campaigns.find((c) => c.status === 'Running' || c.status === 'Paused'), [campaigns]);
   const progressText = activeCampaign ? `${activeCampaign.stats?.sent || 0}/${activeCampaign.stats?.total || 0} emails sent` : '0/0 emails sent';
   const selectedAcc = useMemo(() => projectAccounts.find((a) => a.id === selectedAccount) || null, [projectAccounts, selectedAccount]);
@@ -429,27 +475,27 @@ export default function DashboardPage() {
 
 
   const sendTestEmail = async () => {
-    const acc = accounts.find((a) => a.id === selectedAccount);
-    if (!acc) return alert('Select sender account');
-    if (!testEmailTo) return alert('Enter test recipient email');
-    try {
-      await safeFetchJson('/api/send-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accountId: acc.id,
-          to: testEmailTo,
-          subject: draftSubject,
-          body: draftBody
-        })
-      });
-      alert('Test email sent');
-    } catch (e) {
-      alert(e.message || 'Test email failed');
-    }
-  };
+  const acc = accounts.find((a) => a.id === selectedAccount);
+  if (!acc) return alert('Select sender account');
+  if (!testEmailTo) return alert('Enter test recipient email');
+  try {
+    await safeFetchJson('/api/send-test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accountId: acc.id,
+        to: testEmailTo,
+        subject: draftSubject,
+        body: draftBody
+      })
+    });
+    alert('Test email sent');
+  } catch (e) {
+    alert(e.message || 'Test email failed');
+  }
+};
 
-  const normalizeSelectedListEmails = async () => {
+const normalizeSelectedListEmails = async () => {
     if (!selectedListId) {
       alert('Select a list first');
       return;
@@ -599,25 +645,148 @@ export default function DashboardPage() {
       </section>
 
       <section className="card grid">
-        <h3>Select Email Draft</h3>
-        <div className="row">
-          <select className="select" style={{ maxWidth: 300 }} value={selectedDraft} onChange={(e) => setSelectedDraft(e.target.value)}>
-            <option value="cover_story">Cover Story</option>
-            <option value="reminder">Reminder</option>
-            <option value="follow_up">Follow Up</option>
-            <option value="updated_cost">Updated Cost</option>
-            <option value="final_cost">Final Call</option>
-          </select>
-        </div>
-        <p style={{ fontWeight: 600, color: 'var(--text)' }}>Subject Line</p>
-        <input className="input" value={draftSubject} onChange={(e) => setDraftSubject(e.target.value)} placeholder="Email Subject" />
-        <p style={{ fontWeight: 600, color: 'var(--text)' }}>Draft / Email Body (HTML)</p>
-        <RichTextEditor value={draftBody} onChange={setDraftBody} placeholder="Paste formatted draft here (Gmail/Word supported)" />
-        <div className="row">
-          <input className="input" style={{ maxWidth: 320 }} value={testEmailTo} onChange={(e) => setTestEmailTo(e.target.value)} placeholder="Test recipient email" />
-          <button className="button secondary" onClick={sendTestEmail}>Test Email</button>
-        </div>
-      </section>
+
+<h3>Select Email Draft</h3>
+{/* <ScriptManager/> */}
+
+<div className="row">
+<select
+className="select"
+style={{ maxWidth: 300 }}
+value={selectedDraft}
+onChange={(e) => setSelectedDraft(e.target.value)}
+>
+<option value="cover_story">Cover Story</option>
+<option value="reminder">Reminder</option>
+<option value="follow_up">Follow Up</option>
+<option value="updated_cost">Updated Cost</option>
+<option value="final_cost">Final Call</option>
+</select>
+
+<button
+className="button"
+onClick={() => setShowAddDraft(!showAddDraft)}
+>
++ Add Draft Script
+</button>
+
+</div>
+
+
+{showAddDraft && (
+
+<div className="card" style={{marginTop:10}}>
+
+<h4>Create Draft Script</h4>
+
+<select
+className="select"
+value={newDraftCategory}
+onChange={(e)=>setNewDraftCategory(e.target.value)}
+>
+
+<option value="cover_story">Cover Story</option>
+<option value="reminder">Reminder</option>
+<option value="follow_up">Follow Up</option>
+<option value="updated_cost">Updated Cost</option>
+<option value="final_cost">Final Cost</option>
+
+</select>
+
+<p>Subject</p>
+
+<input
+className="input"
+value={newDraftSubject}
+onChange={(e)=>setNewDraftSubject(e.target.value)}
+placeholder="Enter Subject"
+/>
+
+<p>Draft Body</p>
+
+<RichTextEditor
+value={newDraftBody}
+onChange={setNewDraftBody}
+/>
+
+<button
+className="button"
+onClick={addNewDraft}
+>
+Submit Draft
+</button>
+
+</div>
+
+)}
+
+
+{savedDrafts.length > 0 && (
+
+<div className="grid" style={{marginTop:15}}>
+
+{savedDrafts.map((script)=>(
+<div
+key={script.id}
+className="card"
+style={{cursor:"pointer"}}
+onClick={()=>loadScript(script)}
+>
+
+<b>{script.category}</b>
+
+<p>{script.subject}</p>
+
+</div>
+))}
+
+</div>
+
+)}
+
+
+<p style={{ fontWeight: 600, color: 'var(--text)' }}>
+Subject Line
+</p>
+
+<input
+className="input"
+value={draftSubject}
+onChange={(e)=>setDraftSubject(e.target.value)}
+placeholder="Email Subject"
+/>
+
+
+<p style={{ fontWeight: 600, color: 'var(--text)' }}>
+Draft / Email Body (HTML)
+</p>
+
+<RichTextEditor
+value={draftBody}
+onChange={setDraftBody}
+/>
+
+
+<div className="row">
+
+<input
+className="input"
+style={{ maxWidth: 320 }}
+value={testEmailTo}
+onChange={(e)=>setTestEmailTo(e.target.value)}
+placeholder="Test recipient email"
+/>
+
+<button
+className="button secondary"
+onClick={sendTestEmail}
+>
+Test Email
+</button>
+
+</div>
+
+</section>
 
       <section className="card grid">
         <h3>Excel Upload (.xlsx / .csv)</h3>
