@@ -186,45 +186,143 @@ export default function DashboardPage() {
   const [draftBody, setDraftBody] = useState('');
 
   const [showAddDraft, setShowAddDraft] = useState(false);
-const [newDraftCategory, setNewDraftCategory] = useState("cover_story");
-const [newDraftSubject, setNewDraftSubject] = useState("");
-const [newDraftBody, setNewDraftBody] = useState("");
+  const [newDraftCategory, setNewDraftCategory] = useState("cover_story");
+  const [newDraftSubject, setNewDraftSubject] = useState("");
+  const [newDraftBody, setNewDraftBody] = useState("");
 
-const loadScript = (script) => {
-
-  setDraftSubject(script.subject);
-  setDraftBody(script.body);
-
-};
-
-const addNewDraft = () => {
-
-  if (!newDraftSubject || !newDraftBody) {
-    alert("Please enter subject and body");
-    return;
-  }
-
-  const newScript = {
-    id: Date.now(),
-    category: newDraftCategory,
-    subject: newDraftSubject,
-    body: newDraftBody
+  const loadScript = (script) => {
+    setDraftSubject(script.subject);
+    setDraftBody(script.body);
   };
 
-  setSavedDrafts([...savedDrafts, newScript]);
+  const [savedDrafts, setSavedDrafts] = useState([]);
+  const [activeSavedDraftId, setActiveSavedDraftId] = useState(null);
+  const [editingDraftId, setEditingDraftId] = useState(null);
+  const [newDraftTitle, setNewDraftTitle] = useState("");
+  const [selectedCampaignIds, setSelectedCampaignIds] = useState([]);
+  const handleSavedDraftSelect = (draft) => {
+    const id = draft._id || draft.id;
+    setActiveSavedDraftId(id);
+    loadScript(draft);
+  };
 
-  setNewDraftSubject("");
-  setNewDraftBody("");
-  setShowAddDraft(false);
 
-  alert("Draft Script Added");
-
+const startEditingDraft = (draft) => {
+  setEditingDraftId(draft._id || draft.id);
+  setNewDraftTitle(draft.title);
+  setNewDraftCategory(draft.category);
+  setNewDraftSubject(draft.subject);
+  setNewDraftBody(draft.body);
+  setShowAddDraft(true);
 };
 
-const [savedDrafts, setSavedDrafts] = useState([]);
+const handleDeleteDraft = async (draft) => {
+  const id = draft._id || draft.id;
+  if (!id) return;
+  if (!window.confirm('Delete this draft?')) return;
+  try {
+    await safeFetchJson(`/api/drafts/${id}`, { method: 'DELETE' });
+    if (activeSavedDraftId === id) {
+      setActiveSavedDraftId(null);
+      setDraftSubject('');
+      setDraftBody('');
+    }
+    loadSavedDrafts();
+  } catch (err) {
+    alert(err.message || 'Failed to delete draft');
+  }
+};
+
+  const loadSavedDrafts = async () => {
+    try {
+      const data = await safeFetchJson('/api/drafts');
+      setSavedDrafts(data.drafts || data || []);
+    } catch (err) {
+      console.error('Failed to load drafts', err);
+    }
+  };
+
+
+  const toggleCampaignSelection = (campaignId) => {
+    setSelectedCampaignIds((prev) => {
+      if (prev.includes(campaignId)) {
+        return prev.filter((id) => id !== campaignId);
+      }
+      return [...prev, campaignId];
+    });
+  };
+
+  const toggleSelectAllCampaigns = () => {
+    if (allCampaignsSelected) {
+      setSelectedCampaignIds([]);
+      return;
+    }
+    setSelectedCampaignIds(allCampaignIds);
+  };
+
+  const deleteSelectedCampaigns = async () => {
+    if (!selectedCampaignIds.length) return;
+    if (!window.confirm('Delete selected campaigns? This cannot be undone.')) return;
+    try {
+      await Promise.all(
+        selectedCampaignIds.map((id) =>
+          safeFetchJson(`/api/campaigns/${id}`, { method: 'DELETE' })
+        )
+      );
+      setSelectedCampaignIds([]);
+      await loadAll();
+    } catch (err) {
+      alert(err.message || 'Failed to delete selected campaigns');
+    }
+  };
+
+  const addNewDraft = async () => {
+    if (!newDraftSubject || !newDraftBody) {
+      alert("Please enter subject and body");
+      return;
+    }
+
+    try {
+      const count = savedDrafts.filter((d) => d.category === newDraftCategory).length;
+      const baseTitle = newDraftTitle
+        ? newDraftTitle
+        : `${DRAFT_CATEGORIES.find((c) => c.value === newDraftCategory)?.label || newDraftCategory} Draft ${count + 1}`;
+      const payload = {
+        category: newDraftCategory,
+        title: baseTitle,
+        subject: newDraftSubject,
+        body: newDraftBody
+      };
+      const isEditing = Boolean(editingDraftId);
+      const url = isEditing ? `/api/drafts/${editingDraftId}` : '/api/drafts';
+      const method = isEditing ? 'PATCH' : 'POST';
+      const result = await safeFetchJson(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      setNewDraftSubject("");
+      setNewDraftBody("");
+      setNewDraftTitle("");
+      setShowAddDraft(false);
+      setEditingDraftId(null);
+      alert("Draft Script Added");
+      const saved = result.draft;
+      if (isEditing && saved) {
+        setSavedDrafts((prev) => prev.map((d) => (d._id === saved._id ? saved : d)));
+      } else if (saved) {
+        setSavedDrafts((prev) => [...prev, saved]);
+      }
+      await loadSavedDrafts();
+    } catch (err) {
+      alert(err.message || 'Failed to save draft');
+    }
+  };
   const activeCampaign = useMemo(() => campaigns.find((c) => c.status === 'Running' || c.status === 'Paused'), [campaigns]);
   const progressText = activeCampaign ? `${activeCampaign.stats?.sent || 0}/${activeCampaign.stats?.total || 0} emails sent` : '0/0 emails sent';
   const selectedAcc = useMemo(() => projectAccounts.find((a) => a.id === selectedAccount) || null, [projectAccounts, selectedAccount]);
+  const allCampaignIds = useMemo(() => campaigns.map((c) => c._id), [campaigns]);
+  const allCampaignsSelected = allCampaignIds.length > 0 && allCampaignIds.every((id) => selectedCampaignIds.includes(id));
 
   useEffect(() => {
     if (!projectAccounts.length) {
@@ -368,6 +466,9 @@ const [savedDrafts, setSavedDrafts] = useState([]);
       setLists(st.lists || []);
       setTemplates(tpl.templates || []);
       setCampaigns(cps.campaigns || []);
+      setSelectedCampaignIds((prev) => 
+        (cps.campaigns || []).map((c) => c._id).filter((id) => prev.includes(id))
+      );
       setAccounts(accRes.accounts || []);
 
       const accList = accRes.accounts || [];
@@ -393,6 +494,10 @@ const [savedDrafts, setSavedDrafts] = useState([]);
 
   useEffect(() => {
     loadAll();
+  }, []);
+
+  useEffect(() => {
+    loadSavedDrafts();
   }, []);
 
   useEffect(() => {
@@ -644,150 +749,186 @@ const normalizeSelectedListEmails = async () => {
         ) : null}
       </section>
 
-      <section className="card grid">
+              <section className="card grid">
+        <h3>Select Email Draft</h3>
+        <div className="row" style={{ flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' }}>
+          <select
+            className="select"
+            style={{ maxWidth: 320 }}
+            value={selectedDraft}
+            onChange={(e) => setSelectedDraft(e.target.value)}
+          >
+            <option value="cover_story">Cover Story</option>
+            <option value="reminder">Reminder</option>
+            <option value="follow_up">Follow Up</option>
+            <option value="updated_cost">Updated Cost</option>
+            <option value="final_cost">Final Call</option>
+          </select>
+          <button
+            className="button"
+            type="button"
+            onClick={() => setShowAddDraft((prev) => !prev)}
+          >
+            + Add Draft Script
+          </button>
+        </div>
+        {showAddDraft && (
+          <div className="card" style={{ marginTop: 10 }}>
+            <h4>{editingDraftId ? 'Edit Draft Script' : 'Create Draft Script'}</h4>
+            <select
+              className="select"
+              value={newDraftCategory}
+              onChange={(e) => setNewDraftCategory(e.target.value)}
+            >
+              <option value="cover_story">Cover Story</option>
+              <option value="reminder">Reminder</option>
+              <option value="follow_up">Follow Up</option>
+              <option value="updated_cost">Updated Cost</option>
+              <option value="final_cost">Final Cost</option>
+            </select>
+            <p style={{ marginTop: 12, marginBottom: 6 }}>Script Title (optional)</p>
+            <input
+              className="input"
+              value={newDraftTitle}
+              onChange={(e) => setNewDraftTitle(e.target.value)}
+              placeholder="Script 1, Script 2, etc."
+            />
+            <p style={{ marginTop: 12, marginBottom: 6 }}>Subject</p>
+            <input
+              className="input"
+              value={newDraftSubject}
+              onChange={(e) => setNewDraftSubject(e.target.value)}
+              placeholder="Enter Subject"
+            />
+            <p style={{ marginTop: 12, marginBottom: 6 }}>Draft Body</p>
+            <RichTextEditor
+              value={newDraftBody}
+              onChange={setNewDraftBody}
+            />
+            <div className="row" style={{ gap: 8, marginTop: 12 }}>
+              <button className="button" type="button" onClick={addNewDraft}>
+                {editingDraftId ? 'Update Draft' : 'Submit Draft'}
+              </button>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() => {
+                  setShowAddDraft(false);
+                  setEditingDraftId(null);
+                  setNewDraftTitle('');
+                  setNewDraftSubject('');
+                  setNewDraftBody('');
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )} 
+        {savedDrafts.length > 0 && (
+          <div className="card" style={{ marginTop: 18 }}>
+            <h4>Saved Draft Scripts</h4>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 14 }}>
+              {DRAFT_CATEGORIES.map((cat) => {
+                const scripts = savedDrafts.filter((draft) => draft.category === cat.value);
+                if (!scripts.length) return null;
+                return (
+                  <div
+                    key={cat.value}
+                    className="card"
+                    style={{ padding: 14, borderRadius: 10, background: '#f4f4f4' }}
+                  >
+                    <strong style={{ display: 'block', marginBottom: 10 }}>{cat.label}</strong>
+                    {scripts.map((draft) => {
+                      const scriptId = draft._id || draft.id || `${cat.value}-${draft.title || 'script'}`;
+                      const isActiveScript = scriptId === activeSavedDraftId;
+                      const borderStyle = isActiveScript ? '2px solid #0ea5e9' : '1px solid #e5e7eb';
+                      const bgColor = isActiveScript ? '#e0f2fe' : '#fff';
+                      return (
+                        <div
+                          key={scriptId}
+                          className="card"
+                          style={{
+                            marginBottom: 12,
+                            cursor: 'pointer',
+                            padding: 10,
+                            border: borderStyle,
+                            background: bgColor
+                          }}
+                          onClick={() => handleSavedDraftSelect(draft)}
+                        >
+                          <p style={{ margin: 0, fontWeight: 600 }}>{draft.title}</p>
+                          <small style={{ color: 'var(--muted)' }}>{draft.subject}</small>
+                          {draft.createdAt ? (
+                            <p style={{ fontSize: 11, margin: '6px 0 0', color: 'var(--muted)' }}>
+                              {new Date(draft.createdAt).toLocaleString()}
+                            </p>
+                          ) : null}
+                          <div className="row" style={{ marginTop: 10, gap: 6 }}>
+                            <button
+                              className="button"
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditingDraft(draft);
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="button danger"
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteDraft(draft);
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        <p style={{ fontWeight: 600, color: 'var(--text)', marginTop: 12 }}>
+          Subject Line
+        </p>
+        <input
+          className="input"
+          value={draftSubject}
+          onChange={(e) => setDraftSubject(e.target.value)}
+          placeholder="Email Subject"
+        />
+        <p style={{ fontWeight: 600, color: 'var(--text)', marginTop: 12 }}>
+          Draft / Email Body (HTML)
+        </p>
+        <RichTextEditor
+          value={draftBody}
+          onChange={setDraftBody}
+        />
+        <div className="row">
+          <input
+            className="input"
+            style={{ maxWidth: 320 }}
+            value={testEmailTo}
+            onChange={(e) => setTestEmailTo(e.target.value)}
+            placeholder="Test recipient email"
+          />
+          <button
+            className="button secondary"
+            onClick={sendTestEmail}
+          >
+            Test Email
+          </button>
+        </div>
+      </section>
 
-<h3>Select Email Draft</h3>
-{/* <ScriptManager/> */}
-
-<div className="row">
-<select
-className="select"
-style={{ maxWidth: 300 }}
-value={selectedDraft}
-onChange={(e) => setSelectedDraft(e.target.value)}
->
-<option value="cover_story">Cover Story</option>
-<option value="reminder">Reminder</option>
-<option value="follow_up">Follow Up</option>
-<option value="updated_cost">Updated Cost</option>
-<option value="final_cost">Final Call</option>
-</select>
-
-<button
-className="button"
-onClick={() => setShowAddDraft(!showAddDraft)}
->
-+ Add Draft Script
-</button>
-
-</div>
-
-
-{showAddDraft && (
-
-<div className="card" style={{marginTop:10}}>
-
-<h4>Create Draft Script</h4>
-
-<select
-className="select"
-value={newDraftCategory}
-onChange={(e)=>setNewDraftCategory(e.target.value)}
->
-
-<option value="cover_story">Cover Story</option>
-<option value="reminder">Reminder</option>
-<option value="follow_up">Follow Up</option>
-<option value="updated_cost">Updated Cost</option>
-<option value="final_cost">Final Cost</option>
-
-</select>
-
-<p>Subject</p>
-
-<input
-className="input"
-value={newDraftSubject}
-onChange={(e)=>setNewDraftSubject(e.target.value)}
-placeholder="Enter Subject"
-/>
-
-<p>Draft Body</p>
-
-<RichTextEditor
-value={newDraftBody}
-onChange={setNewDraftBody}
-/>
-
-<button
-className="button"
-onClick={addNewDraft}
->
-Submit Draft
-</button>
-
-</div>
-
-)}
-
-
-{savedDrafts.length > 0 && (
-
-<div className="grid" style={{marginTop:15}}>
-
-{savedDrafts.map((script)=>(
-<div
-key={script.id}
-className="card"
-style={{cursor:"pointer"}}
-onClick={()=>loadScript(script)}
->
-
-<b>{script.category}</b>
-
-<p>{script.subject}</p>
-
-</div>
-))}
-
-</div>
-
-)}
-
-
-<p style={{ fontWeight: 600, color: 'var(--text)' }}>
-Subject Line
-</p>
-
-<input
-className="input"
-value={draftSubject}
-onChange={(e)=>setDraftSubject(e.target.value)}
-placeholder="Email Subject"
-/>
-
-
-<p style={{ fontWeight: 600, color: 'var(--text)' }}>
-Draft / Email Body (HTML)
-</p>
-
-<RichTextEditor
-value={draftBody}
-onChange={setDraftBody}
-/>
-
-
-<div className="row">
-
-<input
-className="input"
-style={{ maxWidth: 320 }}
-value={testEmailTo}
-onChange={(e)=>setTestEmailTo(e.target.value)}
-placeholder="Test recipient email"
-/>
-
-<button
-className="button secondary"
-onClick={sendTestEmail}
->
-Test Email
-</button>
-
-</div>
-
-</section>
-
+      
       <section className="card grid">
         <h3>Excel Upload (.xlsx / .csv)</h3>
         <div className="row">
@@ -837,10 +978,33 @@ Test Email
 
       <section className="card grid">
         <h3>Campaigns</h3>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <button
+            className="button danger"
+            type="button"
+            onClick={deleteSelectedCampaigns}
+            disabled={!selectedCampaignIds.length}
+          >
+            Delete Selected
+          </button>
+          <button className="button secondary" type="button" onClick={toggleSelectAllCampaigns}>
+            {allCampaignsSelected ? 'Clear Selection' : 'Select All'}
+          </button>
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}>
+            {selectedCampaignIds.length} selected
+          </span>
+        </div>
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
+                <th style={{ width: 56 }}>
+                  <input
+                    type="checkbox"
+                    checked={allCampaignsSelected}
+                    onChange={toggleSelectAllCampaigns}
+                  />
+                </th>
                 <th>Name</th>
                 <th>Status</th>
                 <th>Progress</th>
@@ -853,8 +1017,16 @@ Test Email
                 const total = c.stats?.total || 0;
                 const sent = c.stats?.sent || 0;
                 const percent = total ? Math.round((sent / total) * 100) : 0;
+                const isChecked = selectedCampaignIds.includes(c._id);
                 return (
                   <tr key={c._id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleCampaignSelection(c._id)}
+                      />
+                    </td>
                     <td>{c.name}</td>
                     <td><StatusBadge status={c.status} /></td>
                     <td>
