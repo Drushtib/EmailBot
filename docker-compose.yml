@@ -1,0 +1,22 @@
+services:
+  dashboard-next:
+    build:
+      context: ./dashboard-next
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./dashboard-next/.env
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+
+  campaign-engine:
+    build:
+      context: ./campaign_engine
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+    env_file:
+      - ./dashboard-next/.env
+    restart: unless-stopped
