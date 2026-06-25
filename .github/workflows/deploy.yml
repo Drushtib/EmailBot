@@ -1,0 +1,43 @@
+name: CI/CD Deploy EmailBot
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+
+          script: |
+            set -e
+
+            echo "Pulling latest code..."
+            cd ~/EmailBot
+
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "Stopping containers..."
+            docker compose down
+
+            echo "Building images..."
+            docker compose build
+
+            echo "Starting containers..."
+            docker compose up -d
+
+            echo "Cleaning unused images..."
+            docker image prune -f
