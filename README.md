@@ -1,5 +1,6 @@
 # Email Bot Dashboard & Campaign Engine
 echo "CI/CD Test $(date)" >> README.md
+hello testing ci/cd pipeline
 This workspace contains a Python backend for sending batch email campaigns and a Node/Express dashboard frontend.
 
 ## Key Features
