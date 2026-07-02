@@ -42,7 +42,7 @@ jobs:
             echo "Scanning Campaign Engine Image..."
             trivy image --exit-code 1 --severity HIGH,CRITICAL emailbot-campaign-engine
 
-            echo "Starting containers..."
+           echo "Starting containers..."
             docker compose up -d
 
             echo "Cleaning unused images..."
