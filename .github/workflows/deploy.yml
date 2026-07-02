@@ -22,16 +22,29 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
 
           script: |
-            set -e
+            set -euo pipefail
 
-            echo "Pulling latest code..."
-            cd ~/EmailBot
+            REPO_DIR="$HOME/EmailBot"
 
-            git fetch origin main
-            git reset --hard origin/main
+            echo "Preparing deployment directory..."
+            if [ -d "$REPO_DIR/.git" ]; then
+              echo "Updating existing repository..."
+              cd "$REPO_DIR"
+              git fetch origin main
+              git reset --hard origin/main
+            else
+              echo "Cloning repository to $REPO_DIR..."
+              git clone "${{ github.server_url }}/${{ github.repository }}.git" "$REPO_DIR"
+              cd "$REPO_DIR"
+            fi
+
+            echo "Preparing environment file..."
+            if [ ! -f dashboard-next/.env ]; then
+              cp dashboard-next/.env.example dashboard-next/.env
+            fi
 
             echo "Stopping containers..."
-            docker compose down
+            docker compose down || true
 
             echo "Building images..."
             docker compose build
